@@ -1,6 +1,7 @@
 <template>
   <section>
     <svg :viewBox="chartViewbox">
+      <NationsLines :nations="dataUntilThisYear" :scale="scale" />
       <NationsCircles :nations="dataThisYear" :scale="scale"/>
     </svg>
     <p>{{ year }}</p>
@@ -10,20 +11,23 @@
 
 <script>
 import YearScrubber from './YearScrubber.vue'
+import NationsLines from './NationsLines.vue'
 import NationsCircles from './NationsCircles.vue'
 
 import { bisector, descending } from "d3-array";
 import { scaleLog, scaleLinear, scaleSqrt, scaleOrdinal } from "d3-scale";
 import { schemeTableau10 } from "d3-scale-chromatic";
+import { line, curveCardinal } from "d3-shape";
 
-const d3 = { bisector, descending, scaleLog, scaleLinear, scaleSqrt, scaleOrdinal, schemeTableau10 };
+const d3 = { bisector, descending, scaleLog, scaleLinear, scaleSqrt, scaleOrdinal, schemeTableau10, line, curveCardinal };
 
 export default {
   name: 'NationsChart',
 
   components: {
     YearScrubber,
-    NationsCircles
+    NationsCircles,
+    NationsLines
   },
 
   props: {
@@ -49,6 +53,10 @@ export default {
       return this.dataAt(this.year).sort((a, b) => d3.descending(a.population, b.population)); 
     },
 
+    dataUntilThisYear: function() {
+      return this.dataUntil(this.year).sort((a, b) => d3.descending(a.population, b.population));
+    },
+
     chartViewbox: function() {
       return [0, 0, this.width, this.height];
     }
@@ -59,8 +67,9 @@ export default {
       x: d3.scaleLog([200, 1e5], [this.margin.left, this.width - this.margin.right]),
       y: d3.scaleLinear([14, 86], [this.height - this.margin.bottom, this.margin.top]),
       radius: d3.scaleSqrt([0, 5e8], [0, this.width / 24]),
-      color: d3.scaleOrdinal(d3.schemeTableau10)
+      color: d3.scaleOrdinal(d3.schemeTableau10),
     }
+    this.scale.line = d3.line().x(d => this.scale.x(d.income)).y(d => this.scale.y(d.lifeExpectancy)).curve(d3.curveCardinal)
   },
 
   methods: {
@@ -72,6 +81,23 @@ export default {
         population: this.valueAt(d.population, year),
         lifeExpectancy: this.valueAt(d.lifeExpectancy, year)
       }));
+    },
+
+    dataUntil: function(year) {
+      return this.nationsData.map(d => ({
+        name: d.name,
+        region: d.region,
+        income: this.valueUntil(d.income, year),
+        population: this.valueUntil(d.population, year),
+        lifeExpectancy: this.valueUntil(d.lifeExpectancy, year)
+      }));
+    },
+
+    valueUntil: function(values, year) {
+      const startYear = 1800;
+      const years = Array.apply(null, Array(year - startYear + 1))
+        .map((_, index) => startYear + index);
+      return years.map(y => this.valueAt(values, y));
     },
 
     valueAt: function(values, year) {
